@@ -1,248 +1,106 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Website Beautifier</title>
+    <title>Website Capture</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f7fa;
-            color: #333;
-        }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .container {
-            background-color: white;
-            border-radius: 8px;
-            padding: 25px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .url-inputs {
-            margin-bottom: 20px;
         }
         .url-input {
-            display: flex;
-            margin-bottom: 10px;
-        }
-        .url-input input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        .url-input input:focus {
-            outline: none;
-            border-color: #3498db;
+            margin: 10px 0;
+            width: 100%;
+            padding: 8px;
         }
         button {
-            background-color: #3498db;
+            background: #4CAF50;
             color: white;
             border: none;
-            padding: 12px 20px;
-            border-radius: 4px;
+            padding: 10px 15px;
             cursor: pointer;
-            font-size: 16px;
-            width: 100%;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        button:disabled {
-            background-color: #95a5a6;
-            cursor: not-allowed;
-        }
-        .results {
-            margin-top: 30px;
-            display: none;
-        }
-        .status {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 4px;
-            display: none;
-        }
-        .processing {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        .success {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .analysis-item {
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        .progress-bar {
-            height: 5px;
-            background-color: #e9ecef;
-            border-radius: 3px;
-            margin-top: 10px;
-            overflow: hidden;
         }
         .progress {
-            height: 100%;
-            background-color: #3498db;
-            width: 0%;
-            transition: width 0.3s;
+            margin: 20px 0;
+            display: none;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>Website Beautifier</h1>
-    <div class="container">
-        <div class="url-inputs">
-            <h3>Enter 3 Website URLs to Analyze:</h3>
-            <div class="url-input">
-                <input type="url" id="url1" placeholder="https://example.com" required>
-            </div>
-            <div class="url-input">
-                <input type="url" id="url2" placeholder="https://example.org" required>
-            </div>
-            <div class="url-input">
-                <input type="url" id="url3" placeholder="https://example.net" required>
-            </div>
-        </div>
-        
-        <button id="analyze-btn">Analyze Websites</button>
-        
-        <div id="status" class="status">
-            <div id="status-message"></div>
-            <div class="progress-bar">
-                <div id="progress" class="progress"></div>
-            </div>
-        </div>
-        
-        <div id="results" class="results">
-            <h2>Analysis Results</h2>
-            <div id="results-container"></div>
-        </div>
+    <h1>Website Section Capture</h1>
+    
+    <div id="input-section">
+        <h3>Enter 3 Website URLs:</h3>
+        <input type="url" class="url-input" placeholder="https://example.com" id="url1">
+        <input type="url" class="url-input" placeholder="https://example.org" id="url2">
+        <input type="url" class="url-input" placeholder="https://example.net" id="url3">
+        <button id="capture-btn">Capture Sections</button>
+    </div>
+    
+    <div id="progress" class="progress">
+        <p>Processing websites... Please wait</p>
+        <div id="progress-bar"></div>
+    </div>
+    
+    <div id="result" class="result">
+        <h3>Capture Complete!</h3>
+        <p>Screenshots and data saved in:</p>
+        <ul id="result-list"></ul>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const analyzeBtn = document.getElementById('analyze-btn');
-            const statusDiv = document.getElementById('status');
-            const statusMessage = document.getElementById('status-message');
-            const progressBar = document.getElementById('progress');
-            const resultsDiv = document.getElementById('results');
-            const resultsContainer = document.getElementById('results-container');
+        document.getElementById('capture-btn').addEventListener('click', async () => {
+            const urls = [
+                document.getElementById('url1').value,
+                document.getElementById('url2').value,
+                document.getElementById('url3').value
+            ];
             
-            analyzeBtn.addEventListener('click', async function() {
-                // Get URLs
-                const url1 = document.getElementById('url1').value.trim();
-                const url2 = document.getElementById('url2').value.trim();
-                const url3 = document.getElementById('url3').value.trim();
-                
-                if (!url1 || !url2 || !url3) {
-                    showStatus('Please enter all 3 URLs', 'error');
-                    return;
-                }
-                
-                // Disable button and show processing status
-                analyzeBtn.disabled = true;
-                showStatus('Analyzing websites... This may take a minute.', 'processing');
-                updateProgress(20);
-                
-                try {
-                    // Call backend API
-                    const response = await fetch('http://localhost:5000/analyze', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            urls: [url1, url2, url3]
-                        })
-                    });
-                    
-                    updateProgress(60);
-                    
-                    const data = await response.json();
-                    
-                    if (data.status === 'error') {
-                        showStatus(data.message, 'error');
-                        return;
-                    }
-                    
-                    // Show success and results
-                    showStatus('Analysis complete!', 'success');
-                    updateProgress(100);
-                    displayResults(data);
-                    
-                } catch (error) {
-                    showStatus('Error: ' + error.message, 'error');
-                } finally {
-                    analyzeBtn.disabled = false;
-                }
-            });
-            
-            function showStatus(message, type) {
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'status ' + type;
-                statusMessage.textContent = message;
+            // Validate URLs
+            if (urls.some(url => !url.startsWith('http'))) {
+                alert('Please enter valid URLs starting with http:// or https://');
+                return;
             }
             
-            function updateProgress(percent) {
-                progressBar.style.width = percent + '%';
-            }
+            // Show progress
+            document.getElementById('progress').style.display = 'block';
+            document.getElementById('input-section').style.display = 'none';
             
-            function displayResults(data) {
-                resultsDiv.style.display = 'block';
-                resultsContainer.innerHTML = '';
+            try {
+                const response = await fetch('http://localhost:5000/capture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ urls })
+                });
+                
+                const data = await response.json();
+                
+                // Show results
+                const resultList = document.getElementById('result-list');
+                resultList.innerHTML = '';
                 
                 data.results.forEach(result => {
-                    const item = document.createElement('div');
-                    item.className = 'analysis-item';
-                    
-                    const urlHeader = document.createElement('h3');
-                    urlHeader.textContent = result.url;
-                    item.appendChild(urlHeader);
-                    
-                    const analysisId = document.createElement('p');
-                    analysisId.textContent = 'Analysis ID: ' + result.analysis_id;
-                    item.appendChild(analysisId);
-                    
-                    const sectionsFound = document.createElement('p');
-                    sectionsFound.textContent = 'Sections found: ' + result.sections_found.join(', ');
-                    item.appendChild(sectionsFound);
-                    
-                    const statusBtn = document.createElement('button');
-                    statusBtn.textContent = 'Check Detailed Status';
-                    statusBtn.style.marginTop = '10px';
-                    statusBtn.style.width = 'auto';
-                    statusBtn.addEventListener('click', () => {
-                        checkDetailedStatus(result.analysis_id);
-                    });
-                    item.appendChild(statusBtn);
-                    
-                    resultsContainer.appendChild(item);
+                    const li = document.createElement('li');
+                    li.textContent = `${result.url} → Saved in captures/${result.folder}`;
+                    resultList.appendChild(li);
                 });
-            }
-            
-            async function checkDetailedStatus(analysisId) {
-                try {
-                    const response = await fetch(`http://localhost:5000/status/${analysisId}`);
-                    const data = await response.json();
-                    alert(`Analysis ${analysisId} status: ${data.status}`);
-                } catch (error) {
-                    alert('Error checking status: ' + error.message);
-                }
+                
+                document.getElementById('progress').style.display = 'none';
+                document.getElementById('result').style.display = 'block';
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                document.getElementById('progress').style.display = 'none';
+                document.getElementById('input-section').style.display = 'block';
             }
         });
     </script>
