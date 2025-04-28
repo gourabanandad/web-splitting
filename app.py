@@ -13,34 +13,32 @@ class WebsiteCapture:
     async def capture_sections(self, url, folder_name):
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            page = await browser.new_page(viewport={'width': 1280, 'height': 720})
             
             try:
-                # Create folder
                 os.makedirs(f"captures/{folder_name}", exist_ok=True)
                 
-                # Go to page
-                await page.goto(url, wait_until="networkidle", timeout=60000)
+                # Load the page with multiple strategies
+                await self._load_page_with_retries(page, url)
                 
-                # Capture sections
                 results = {}
-                for section in ["header", "hero", "footer"]:
-                    element = await self._find_section(page, section)
-                    if element:
-                        # Save screenshot
-                        screenshot_path = f"captures/{folder_name}/{section}.png"
-                        await element.screenshot(path=screenshot_path)
-                        
-                        # Extract text
-                        text = await element.inner_text()
-                        text = ' '.join(text.split()).strip()[:500]
-                        
-                        results[section] = {
-                            "screenshot": screenshot_path,
-                            "text": text
-                        }
                 
-                # Save JSON
+                # Capture header
+                header = await self._capture_section(page, "header", folder_name)
+                if header:
+                    results["header"] = header
+                
+                # Capture hero with improved detection
+                hero = await self._capture_hero_section(page, folder_name)
+                if hero:
+                    results["hero"] = hero
+                
+                # Capture footer
+                footer = await self._capture_section(page, "footer", folder_name)
+                if footer:
+                    results["footer"] = footer
+                
+                # Save results
                 with open(f"captures/{folder_name}/data.json", "w") as f:
                     json.dump(results, f)
                 
@@ -51,55 +49,87 @@ class WebsiteCapture:
             finally:
                 await browser.close()
 
-    async def _find_section(self, page, section_type):
-        selectors = {
-    "header": [
-        "header",
-        "[role='banner']",
-        ".header",
-        "#header",
-        ".site-header",
-        ".page-header",
-        ".main-header",
-        ".top-header",
-        "nav",
-        ".navbar",
-        ".nav-bar"
-    ],
-    "hero": [
-        ".hero",
-        ".banner",
-        ".jumbotron",
-        "#hero",
-        "#banner",
-        ".hero-section",
-        ".main-banner",
-        ".intro",
-        ".landing-hero",
-        ".top-section",
-        ".hero-container",
-        ".cover",
-        ".splash"
-    ],
-    "footer": [
-        "footer",
-        "[role='contentinfo']",
-        ".footer",
-        "#footer",
-        ".site-footer",
-        ".page-footer",
-        ".main-footer",
-        ".bottom-footer",
-        ".footer-container"
-    ]
-}
+    async def _load_page_with_retries(self, page, url):
+        """Try multiple loading strategies"""
+        try:
+            await page.goto(url, wait_until="networkidle", timeout=30000)
+        except:
+            try:
+                await page.goto(url, wait_until="load", timeout=30000)
+            except:
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
+    async def _capture_section(self, page, section_type, folder_name):
+        """Generic section capture"""
+        selectors = {
+            "header": ["header", "[role='banner']", ".header", "#header"],
+            "footer": ["footer", "[role='contentinfo']", ".footer", "#footer"]
+        }
         
         for selector in selectors[section_type]:
             element = await page.query_selector(selector)
             if element and await element.is_visible():
-                return element
+                box = await element.bounding_box()
+                if box and box['width'] > 100 and box['height'] > 50:
+                    path = f"captures/{folder_name}/{section_type}.png"
+                    await element.screenshot(path=path)
+                    return {
+                        "screenshot": path,
+                        "text": await self._clean_text(element)
+                    }
         return None
+
+    async def _capture_hero_section(self, page, folder_name):
+        """Specialized hero section detection"""
+        # Try common hero selectors first
+        hero_selectors = [
+            ".hero", ".banner", ".jumbotron", 
+            ".hero-section", ".hero-banner",
+            "section:first-of-type", "main > div:first-child",
+            "[data-section='hero']", "[data-component='hero']"
+        ]
+        
+        for selector in hero_selectors:
+            element = await page.query_selector(selector)
+            if element and await element.is_visible():
+                box = await element.bounding_box()
+                if box and box['width'] > 300 and box['height'] > 200:
+                    path = f"captures/{folder_name}/hero.png"
+                    await element.screenshot(path=path)
+                    return {
+                        "screenshot": path,
+                        "text": await self._clean_text(element)
+                    }
+        
+        # Fallback: Find largest section at top of page
+        sections = await page.query_selector_all("section, div, header")
+        hero_candidate = None
+        max_area = 0
+        
+        for section in sections:
+            if await section.is_visible():
+                box = await section.bounding_box()
+                if box:
+                    area = box['width'] * box['height']
+                    # Prioritize sections near top of page
+                    if box['y'] < 500 and area > max_area and area > 100000:
+                        max_area = area
+                        hero_candidate = section
+        
+        if hero_candidate:
+            path = f"captures/{folder_name}/hero.png"
+            await hero_candidate.screenshot(path=path)
+            return {
+                "screenshot": path,
+                "text": await self._clean_text(hero_candidate)
+            }
+        
+        return None
+
+    async def _clean_text(self, element):
+        """Clean extracted text"""
+        text = await element.inner_text()
+        return ' '.join(text.split()).strip()[:500]
 
 def run_async(coro):
     loop = asyncio.new_event_loop()
@@ -114,11 +144,9 @@ def capture():
     if len(urls) != 3:
         return jsonify({"error": "Exactly 3 URLs required"}), 400
     
-    # Create folders for each site
     folders = [f"site_{i+1}" for i in range(3)]
-    
-    # Capture all sites
     capturer = WebsiteCapture()
+    
     results = []
     for url, folder in zip(urls, folders):
         result = run_async(capturer.capture_sections(url, folder))
